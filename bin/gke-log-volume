@@ -9,43 +9,108 @@
 #  -n/--node-summary only show the node totals
 #  -q/--quiet omit progress messaging and headers
 
-DEF_PROJECT=$(gcloud config get-value core/project)
-DEF_ZONE=$(gcloud config get-value compute/zone)
-INTERNAL_IP_ARG=
+node=
+project=
+zone=
+quiet=false
+internal_ip=false
+internal_ip_arg=
+duration=30
+active_only=false
+node_only=false
 
-PROJECT=${PROJECT:-$DEF_PROJECT}
-ZONE=${ZONE:-$DEF_ZONE}
-DURATION="${DURATION:-30}"
-INTERNAL_IP=${INTERNAL_IP:-true}
-if [ "$INTERNAL_IP" == "true" ]; then
-  INTERNAL_IP_ARG="--internal-ip"
+# parse out the options
+OPTS=$(getopt -o d:p:z:ianq --long duration:,project:,zone:,internal-ip,active-only,node-only,quiet -- "$@")
+if [[ $? -ne 0 ]]; then
+    echo "Error: failed to parse command line options."
+    exit 1
 fi
-GCP_SSH_CMD="gcloud compute --quiet ssh $INTERNAL_IP_ARG $1 --project $PROJECT --zone $ZONE "
 
-echo "Track log volume on $1 over ${DURATION}s ..."
-$GCP_SSH_CMD --command="\
-  echo \"Snapshot logs...\";\
-  start_data=\$(\
-    for log in /var/log/containers/*.log; do\
-        echo -n \"\$log+\$(sudo cat \$log | wc -l)+\$(sudo du -L --bytes \$log | awk '{print \$1}') \";\
-    done\
-  );\
-  echo \"Sleeping $DURATION seconds...\";\
-  sleep $DURATION;\
-  echo \"Measure log volume...\";\
-  node_lines_written=0;\
-  node_bytes_written=0;\
-  for log_line in \$start_data; do\
-    file=\$(echo -n \$log_line | cut -d'+' -f1);\
-    start_lines=\$(echo -n \$log_line | cut -d'+' -f2);\
-    start_size=\$(echo -n \$log_line | cut -d'+' -f3);\
-    end_lines=\$(sudo cat \$file | wc -l);\
-    end_size=\$(sudo du -L --bytes \$file | awk '{print \$1}');\
-    lines_written=\$((\$end_lines-\$start_lines));\
-    bytes_written=\$((\$end_size-\$start_size));\
-    node_lines_written=\$((\$node_lines_written+\$lines_written));\
-    node_bytes_written=\$((\$node_bytes_written+\$bytes_written));\
-    echo \$file \$lines_written \$bytes_written \$((\$lines_written/$DURATION)) \$((\$bytes_written/$DURATION));\
-  done;\
-  echo $1 \$node_lines_written \$node_bytes_written \$((\$node_lines_written/$DURATION)) \$((\$node_bytes_written/$DURATION));\
-  " 2>/dev/null
+eval set -- "$OPTS"
+while true; do
+  case "$1" in
+    -d|--duration)
+        duration="$2"
+        shift; shift
+        ;;
+    -p|--project)
+        project="$2"
+        shift; shift
+        ;;
+    -z|--zone)
+        zone="$2"
+        shift; shift
+        ;;
+    -i|--internal-ip)
+        internal_ip=true
+        shift
+        ;;
+    -a|--active-only)
+        active_only=true
+        shift
+        ;;
+    -n|--node-only)
+        node_only=true
+        shift
+        ;;
+    -q|--quiet)
+        quiet=true
+        shift
+        ;;
+    --)
+        shift
+        if [ ! -z "$1" ]; then
+            node="$1"
+        fi
+        break
+        ;;
+    *)
+        echo "Error: unknown option '${1}'"
+#        help 1
+        ;;
+  esac
+done
+
+project=${project:-$(gcloud config get-value core/project)}
+zone=${zone:-$(gcloud config get-value compute/zone)}
+if [ "$internal_ip" == "true" ]; then
+  internal_ip_arg="--internal-ip"
+fi
+gcp_ssh_cmd="gcloud compute --quiet ssh $internal_ip_arg $node --project $project --zone $zone "
+
+echo "node $node"
+echo "project $project"
+echo "zone $zone"
+echo "duration $duration"
+echo "internal $internal_ip"
+echo "active $active_only"
+echo "node only $node_only"
+echo "quiet $quiet"
+
+# echo "Track log volume on $node over ${duration}s ..."
+# $gcp_ssh_cmd --command="\
+#   echo \"Snapshot logs...\";\
+#   start_data=\$(\
+#     for log in /var/log/containers/*.log; do\
+#         echo -n \"\$log+\$(sudo cat \$log | wc -l)+\$(sudo du -L --bytes \$log | awk '{print \$1}') \";\
+#     done\
+#   );\
+#   echo \"Sleeping $duration seconds...\";\
+#   sleep $duration;\
+#   echo \"Measure log volume...\";\
+#   node_lines_written=0;\
+#   node_bytes_written=0;\
+#   for log_line in \$start_data; do\
+#     file=\$(echo -n \$log_line | cut -d'+' -f1);\
+#     start_lines=\$(echo -n \$log_line | cut -d'+' -f2);\
+#     start_size=\$(echo -n \$log_line | cut -d'+' -f3);\
+#     end_lines=\$(sudo cat \$file | wc -l);\
+#     end_size=\$(sudo du -L --bytes \$file | awk '{print \$1}');\
+#     lines_written=\$((\$end_lines-\$start_lines));\
+#     bytes_written=\$((\$end_size-\$start_size));\
+#     node_lines_written=\$((\$node_lines_written+\$lines_written));\
+#     node_bytes_written=\$((\$node_bytes_written+\$bytes_written));\
+#     echo \$file \$lines_written \$bytes_written \$((\$lines_written/$duration)) \$((\$bytes_written/$duration));\
+#   done;\
+#   echo $1 \$node_lines_written \$node_bytes_written \$((\$node_lines_written/$duration)) \$((\$node_bytes_written/$duration));\
+#   " 2>/dev/null
