@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+
+# options
+#  -p/--project the google project name, default to gcloud config
+#  -z/--zone the google zone name, default to gcloud config
+#  -i/--internal-ip use the node's internal ip address
+#  -o/--omit-inactive don't list logs with no activity in the test period
+#  -n/--node-summary only show the node totals
+#  -q/--quiet omit progress messaging and headers
+
+DEF_PROJECT=$(gcloud config get-value core/project)
+DEF_ZONE=$(gcloud config get-value compute/zone)
+INTERNAL_IP_ARG=
+
+PROJECT=${PROJECT:-$DEF_PROJECT}
+ZONE=${ZONE:-$DEF_ZONE}
+PERIOD="${PERIOD:-30}"
+INTERNAL_IP=${INTERNAL_IP:-true}
+if [ "$INTERNAL_IP" == "true" ]; then
+  INTERNAL_IP_ARG="--internal-ip"
+fi
+GCP_SSH_CMD="gcloud compute --quiet ssh $INTERNAL_IP_ARG $1 --project $PROJECT --zone $ZONE "
+
+echo "Track log volume on $1 over ${PERIOD}s ..."
+echo "Fetch log set and start data ..."
+start_data=$($GCP_SSH_CMD --command="\
+  for log in /var/log/containers/*.log; do\
+    echo -n \"\$log+\$(sudo cat \$log | wc -l)+\$(sudo du -L --bytes \$log | awk '{print \$1}') \";\
+  done" 2>/dev/null)
+echo "Sleeping $PERIOD seconds ..."
+sleep $PERIOD
+echo "Fetch stop data and calculate results ..."
+$GCP_SSH_CMD --command="\
+  for log_line in $start_data; do\
+    file=\$(echo -n \$log_line | cut -d'+' -f1);\
+    start_lines=\$(echo -n \$log_line | cut -d'+' -f2);\
+    start_size=\$(echo -n \$log_line | cut -d'+' -f3);\
+    end_lines=\$(sudo cat \$file | wc -l);\
+    end_size=\$(sudo du -L --bytes \$file | awk '{print \$1}');\
+    lines_written=\$((\$end_lines-\$start_lines));\
+    bytes_written=\$((\$end_size-\$start_size));\
+    echo \$file \$lines_written \$bytes_written \$((\$lines_written/$PERIOD)) \$((\$bytes_written/$PERIOD));\
+  done" 2>/dev/null
