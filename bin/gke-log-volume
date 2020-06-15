@@ -22,7 +22,7 @@ if [ "$INTERNAL_IP" == "true" ]; then
 fi
 GCP_SSH_CMD="gcloud compute --quiet ssh $INTERNAL_IP_ARG $1 --project $PROJECT --zone $ZONE "
 
-echo "Track log volume on $1 over ${PERIOD}s ..."
+echo "Track log volume on $1 over ${DURATION}s ..."
 $GCP_SSH_CMD --command="\
   echo \"Snapshot logs...\";\
   start_data=\$(\
@@ -33,6 +33,8 @@ $GCP_SSH_CMD --command="\
   echo \"Sleeping $DURATION seconds...\";\
   sleep $DURATION;\
   echo \"Measure log volume...\";\
+  node_lines_written=0;\
+  node_bytes_written=0;\
   for log_line in \$start_data; do\
     file=\$(echo -n \$log_line | cut -d'+' -f1);\
     start_lines=\$(echo -n \$log_line | cut -d'+' -f2);\
@@ -41,5 +43,9 @@ $GCP_SSH_CMD --command="\
     end_size=\$(sudo du -L --bytes \$file | awk '{print \$1}');\
     lines_written=\$((\$end_lines-\$start_lines));\
     bytes_written=\$((\$end_size-\$start_size));\
+    node_lines_written=\$((\$node_lines_written+\$lines_written));\
+    node_bytes_written=\$((\$node_bytes_written+\$bytes_written));\
     echo \$file \$lines_written \$bytes_written \$((\$lines_written/$DURATION)) \$((\$bytes_written/$DURATION));\
-  done" 2>/dev/null
+  done;\
+  echo $1 \$node_lines_written \$node_bytes_written \$((\$node_lines_written/$DURATION)) \$((\$node_bytes_written/$DURATION));\
+  " 2>/dev/null
