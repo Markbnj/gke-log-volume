@@ -122,6 +122,9 @@ $gcp_ssh_cmd --command="\
     fi;\
     node_lines_written=\$((\$node_lines_written+\$lines_written));\
     node_bytes_written=\$((\$node_bytes_written+\$bytes_written));\
+    if [ \"$node_only\" == \"true\" ]; then\
+      continue;\
+    fi;\
     echo \$file \$lines_written \$bytes_written \$((\$lines_written/$duration)) \$((\$bytes_written/$duration));\
   done;\
   echo $node \$node_lines_written \$node_bytes_written \$((\$node_lines_written/$duration)) \$((\$node_bytes_written/$duration));\
