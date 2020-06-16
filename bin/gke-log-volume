@@ -22,6 +22,7 @@ internal_ip_arg=
 duration=30
 active_only=false
 node_only=false
+log_path=/var/log/containers/
 
 # parse out the options
 OPTS=$(getopt -o d:p:z:e:l:ianq --long duration:,project:,zone:,exclude:,include:,internal-ip,active-only,node-only,quiet -- "$@")
@@ -94,7 +95,7 @@ echo "Track log volume on $node over ${duration}s ..."
 $gcp_ssh_cmd --command="\
   echo \"Snapshot logs...\";\
   start_data=\$(\
-    for log in /var/log/containers/*.log; do\
+    for log in ${log_path}*.log; do\
       if [[ ! \$log =~ $include ]]; then\
         continue;\
       fi;\
@@ -125,7 +126,7 @@ $gcp_ssh_cmd --command="\
     if [ \"$node_only\" == \"true\" ]; then\
       continue;\
     fi;\
-    echo \$file \$lines_written \$bytes_written \$((\$lines_written/$duration)) \$((\$bytes_written/$duration));\
+    echo \${file/\"$log_path\"/} \$lines_written \$bytes_written \$((\$lines_written/$duration)) \$((\$bytes_written/$duration));\
   done;\
   echo $node \$node_lines_written \$node_bytes_written \$((\$node_lines_written/$duration)) \$((\$node_bytes_written/$duration));\
   " 2>/dev/null
