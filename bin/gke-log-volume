@@ -7,8 +7,8 @@
 #  -e/--exclude regex for logs to exclude
 #  -l/--include regex for logs to include
 #  -i/--internal-ip use the node's internal ip address
-#  -o/--omit-inactive don't list logs with no activity in the test period
-#  -n/--node-summary only show the node totals
+#  -o/--active-only don't list logs with no activity in the test period
+#  -n/--node-only only show the node totals
 #  -q/--quiet omit progress messaging and headers
 
 node=
@@ -117,6 +117,9 @@ $gcp_ssh_cmd --command="\
     end_size=\$(sudo du -L --bytes \$file | awk '{print \$1}');\
     lines_written=\$((\$end_lines-\$start_lines));\
     bytes_written=\$((\$end_size-\$start_size));\
+    if [[ \"$active_only\" == \"true\" && \$lines_written -eq 0 ]]; then\
+      continue;\
+    fi;\
     node_lines_written=\$((\$node_lines_written+\$lines_written));\
     node_bytes_written=\$((\$node_bytes_written+\$bytes_written));\
     echo \$file \$lines_written \$bytes_written \$((\$lines_written/$duration)) \$((\$bytes_written/$duration));\
