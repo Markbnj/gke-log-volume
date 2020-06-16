@@ -4,6 +4,8 @@
 #  -d/--duration number of seconds to wait for log activity
 #  -p/--project the google project name, default to gcloud config
 #  -z/--zone the google zone name, default to gcloud config
+#  -e/--exclude regex for logs to exclude
+#  -l/--include regex for logs to include
 #  -i/--internal-ip use the node's internal ip address
 #  -o/--omit-inactive don't list logs with no activity in the test period
 #  -n/--node-summary only show the node totals
@@ -12,6 +14,8 @@
 node=
 project=
 zone=
+exclude=
+include=.*
 quiet=false
 internal_ip=false
 internal_ip_arg=
@@ -20,7 +24,7 @@ active_only=false
 node_only=false
 
 # parse out the options
-OPTS=$(getopt -o d:p:z:ianq --long duration:,project:,zone:,internal-ip,active-only,node-only,quiet -- "$@")
+OPTS=$(getopt -o d:p:z:e:l:ianq --long duration:,project:,zone:,exclude:,include:,internal-ip,active-only,node-only,quiet -- "$@")
 if [[ $? -ne 0 ]]; then
     echo "Error: failed to parse command line options."
     exit 1
@@ -39,6 +43,14 @@ while true; do
         ;;
     -z|--zone)
         zone="$2"
+        shift; shift
+        ;;
+    -e|--exclude)
+        exclude="$2"
+        shift; shift
+        ;;
+    -l|--include)
+        include="$2"
         shift; shift
         ;;
     -i|--internal-ip)
@@ -78,39 +90,36 @@ if [ "$internal_ip" == "true" ]; then
 fi
 gcp_ssh_cmd="gcloud compute --quiet ssh $internal_ip_arg $node --project $project --zone $zone "
 
-echo "node $node"
-echo "project $project"
-echo "zone $zone"
-echo "duration $duration"
-echo "internal $internal_ip"
-echo "active $active_only"
-echo "node only $node_only"
-echo "quiet $quiet"
-
-# echo "Track log volume on $node over ${duration}s ..."
-# $gcp_ssh_cmd --command="\
-#   echo \"Snapshot logs...\";\
-#   start_data=\$(\
-#     for log in /var/log/containers/*.log; do\
-#         echo -n \"\$log+\$(sudo cat \$log | wc -l)+\$(sudo du -L --bytes \$log | awk '{print \$1}') \";\
-#     done\
-#   );\
-#   echo \"Sleeping $duration seconds...\";\
-#   sleep $duration;\
-#   echo \"Measure log volume...\";\
-#   node_lines_written=0;\
-#   node_bytes_written=0;\
-#   for log_line in \$start_data; do\
-#     file=\$(echo -n \$log_line | cut -d'+' -f1);\
-#     start_lines=\$(echo -n \$log_line | cut -d'+' -f2);\
-#     start_size=\$(echo -n \$log_line | cut -d'+' -f3);\
-#     end_lines=\$(sudo cat \$file | wc -l);\
-#     end_size=\$(sudo du -L --bytes \$file | awk '{print \$1}');\
-#     lines_written=\$((\$end_lines-\$start_lines));\
-#     bytes_written=\$((\$end_size-\$start_size));\
-#     node_lines_written=\$((\$node_lines_written+\$lines_written));\
-#     node_bytes_written=\$((\$node_bytes_written+\$bytes_written));\
-#     echo \$file \$lines_written \$bytes_written \$((\$lines_written/$duration)) \$((\$bytes_written/$duration));\
-#   done;\
-#   echo $1 \$node_lines_written \$node_bytes_written \$((\$node_lines_written/$duration)) \$((\$node_bytes_written/$duration));\
-#   " 2>/dev/null
+echo "Track log volume on $node over ${duration}s ..."
+$gcp_ssh_cmd --command="\
+  echo \"Snapshot logs...\";\
+  start_data=\$(\
+    for log in /var/log/containers/*.log; do\
+      if [[ ! \$log =~ $include ]]; then\
+        continue;\
+      fi;\
+      if [[ ! -z \"$exclude\" && \$log =~ ${exclude:-xxx} ]]; then\
+        continue;\
+      fi;\
+      echo -n \"\$log+\$(sudo cat \$log | wc -l)+\$(sudo du -L --bytes \$log | awk '{print \$1}') \";\
+    done\
+  );\
+  echo \"Sleeping $duration seconds...\";\
+  sleep $duration;\
+  echo \"Measure log volume...\";\
+  node_lines_written=0;\
+  node_bytes_written=0;\
+  for log_line in \$start_data; do\
+    file=\$(echo -n \$log_line | cut -d'+' -f1);\
+    start_lines=\$(echo -n \$log_line | cut -d'+' -f2);\
+    start_size=\$(echo -n \$log_line | cut -d'+' -f3);\
+    end_lines=\$(sudo cat \$file | wc -l);\
+    end_size=\$(sudo du -L --bytes \$file | awk '{print \$1}');\
+    lines_written=\$((\$end_lines-\$start_lines));\
+    bytes_written=\$((\$end_size-\$start_size));\
+    node_lines_written=\$((\$node_lines_written+\$lines_written));\
+    node_bytes_written=\$((\$node_bytes_written+\$bytes_written));\
+    echo \$file \$lines_written \$bytes_written \$((\$lines_written/$duration)) \$((\$bytes_written/$duration));\
+  done;\
+  echo $node \$node_lines_written \$node_bytes_written \$((\$node_lines_written/$duration)) \$((\$node_bytes_written/$duration));\
+  " 2>/dev/null
