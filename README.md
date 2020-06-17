@@ -57,6 +57,9 @@ OPTIONAL ARGUMENTS
     Sets a regexp used to include logs. Log filenames that match this
     regexp will be included, all others will be ignored.
 
+  -u|--user USER
+    Overrides the user that is used to authenticate the connection.
+
   -i|--internal-ip
     If set the ssh connection will be made to the node's internal IP.
 
