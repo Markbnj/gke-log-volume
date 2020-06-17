@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
 node=
+user=
+user_arg=
 project=
 zone=
 exclude=
@@ -58,6 +60,9 @@ OPTIONAL ARGUMENTS
     Sets a regexp used to include logs. Log filenames that match this
     regexp will be included, all others will be ignored.
 
+  -u|--user USER
+    Overrides the user that is used to authenticate the connection.
+
   -i|--internal-ip
     If set the ssh connection will be made to the node's internal IP.
 
@@ -85,7 +90,7 @@ EOF
 }
 
 # parse out the options
-OPTS=$(getopt -o hd:p:z:e:l:ianq --long help,duration:,project:,zone:,exclude:,include:,internal-ip,active-only,node-only,quiet -- "$@")
+OPTS=$(getopt -o hd:p:z:e:l:u:ianq --long help,duration:,project:,zone:,exclude:,include:,user:,internal-ip,active-only,node-only,quiet -- "$@")
 if [[ $? -ne 0 ]]; then
     echo "Error: failed to parse command line options."
     usage 1
@@ -116,6 +121,10 @@ while true; do
         ;;
     -l|--include)
         include="$2"
+        shift; shift
+        ;;
+    -u|--user)
+        user="$2"
         shift; shift
         ;;
     -i|--internal-ip)
@@ -153,7 +162,10 @@ zone=${zone:-$(gcloud config get-value compute/zone)}
 if [ "$internal_ip" == "true" ]; then
   internal_ip_arg="--internal-ip"
 fi
-gcp_ssh_cmd="gcloud compute --quiet ssh $internal_ip_arg $node --project $project --zone $zone "
+if [ ! -z "$user" ]; then
+  user_arg="$user@"
+fi
+gcp_ssh_cmd="gcloud compute --quiet ssh $internal_ip_arg ${user_arg}$node --project $project --zone $zone "
 
 if [ "$quiet" != "true" ]; then echo "Track log volume on $node over ${duration}s ..."; fi
 $gcp_ssh_cmd --command="\
