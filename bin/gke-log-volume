@@ -1,16 +1,5 @@
 #!/usr/bin/env bash
 
-# options
-#  -d/--duration number of seconds to wait for log activity
-#  -p/--project the google project name, default to gcloud config
-#  -z/--zone the google zone name, default to gcloud config
-#  -e/--exclude regex for logs to exclude
-#  -l/--include regex for logs to include
-#  -i/--internal-ip use the node's internal ip address
-#  -o/--active-only don't list logs with no activity in the test period
-#  -n/--node-only only show the node totals
-#  -q/--quiet omit progress messaging and headers
-
 node=
 project=
 zone=
@@ -24,16 +13,93 @@ active_only=false
 node_only=false
 log_path=/var/log/containers/
 
+function usage {
+cat << EOF
+NAME
+  gke-log-volume - connects to a GKE (Google Kubernetes Engine) node and
+  measures lines/bytes written to log files over a configurable interval.
+
+SYNOPSIS
+  gke-log-volume [OPTIONS] NODE
+
+DESCRIPTION
+  gke-log-volume enumerates the log files in /var/log/containers, and takes
+  a snapshot of the current line count and size in bytes for each. It then
+  sleeps for a configurable interval and takes another measurement, before
+  reporting the results in a format that is easy to consume and analyze.
+
+POSITIONAL ARGUMENTS
+  NODE
+    Name of the GKE node to connect to.
+
+OPTIONAL ARGUMENTS
+  -h|--help
+    Display this help. All other arguments are ignored.
+
+  -d|--duration SECONDS
+    Sets the length of the period between measurements in seconds. Defaults
+    to 30 seconds.
+
+  -p|--project PROJECT
+    The name of the Google Cloud project in which the node is located.
+    Defaults to the current value returned by 'gcloud config get-value
+    core/project'.
+
+  -z|--zone ZONE
+    The name of the Google Cloud zone in which the node is located.
+    Defaults to the current value returned by 'gcloud config get-value
+    compute/zone'.
+
+  -e|--exclude REGEXP
+    Sets a regexp used to exclude logs. Log filenames that match this
+    regexp will not be included in the output or totals.
+
+  -l|--include REGEXP
+    Sets a regexp used to include logs. Log filenames that match this
+    regexp will be included, all others will be ignored.
+
+  -i|--internal-ip
+    If set the ssh connection will be made to the node's internal IP. If
+    unset the connection is to the external IP if one exists, else the
+    identity aware proxy will be used.
+
+  -a|--active-only
+    If set logs that have 0 lines written during the test will be ignored.
+
+  -n|--node-only
+    If set individual log results will be omitted and only node totals
+    will be output.
+
+  -q|--quiet
+    If set disable all output except the results.
+
+OUTPUT
+  The script outputs results for each log and for the node as a whole
+  (except in the case where --node-only is set) in the format:
+
+  [name] [lines written] [bytes written] [lines/second] [bytes/second]
+EOF
+  if [ -z "${1-}" ]; then
+    exit 0
+  else
+    exit $1
+  fi
+}
+
 # parse out the options
-OPTS=$(getopt -o d:p:z:e:l:ianq --long duration:,project:,zone:,exclude:,include:,internal-ip,active-only,node-only,quiet -- "$@")
+OPTS=$(getopt -o hd:p:z:e:l:ianq --long help,duration:,project:,zone:,exclude:,include:,internal-ip,active-only,node-only,quiet -- "$@")
 if [[ $? -ne 0 ]]; then
     echo "Error: failed to parse command line options."
-    exit 1
+    usage 1
 fi
 
 eval set -- "$OPTS"
 while true; do
   case "$1" in
+    -h|--help)
+        usage
+        shift
+        ;;
     -d|--duration)
         duration="$2"
         shift; shift
@@ -79,7 +145,7 @@ while true; do
         ;;
     *)
         echo "Error: unknown option '${1}'"
-#        help 1
+        usage 1
         ;;
   esac
 done
