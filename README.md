@@ -79,5 +79,8 @@ OUTPUT
 
   [name] [lines written] [bytes written] [lines/second] [bytes/second]
 ```
+## Limitations
+
+The script does not attempt to detect or deal with log rotation. If you get negative numbers back from a node this is due to the container log rotating and the /var/log/containers symlink getting updated to point to the new file. Log volume can vary widely over time depending on the type of workload. A number of other system level considerations can affect the rate and timing of writes to the log files. For all of these reasons multiple test runs should be performed and negative values discarded. In general this tool is meant to give an approximation of total volume and relative volume across nodes. It should not be relied on for exact numbers.
 
 ## PR's welcome!
