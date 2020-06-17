@@ -205,4 +205,4 @@ $gcp_ssh_cmd --command="\
     echo \${file/\"$log_path\"/} \$lines_written \$bytes_written \$((\$lines_written/$duration)) \$((\$bytes_written/$duration));\
   done;\
   echo $node \$node_lines_written \$node_bytes_written \$((\$node_lines_written/$duration)) \$((\$node_bytes_written/$duration));\
-  " 2>/dev/null
+  "
