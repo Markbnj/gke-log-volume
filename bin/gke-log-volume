@@ -59,9 +59,7 @@ OPTIONAL ARGUMENTS
     regexp will be included, all others will be ignored.
 
   -i|--internal-ip
-    If set the ssh connection will be made to the node's internal IP. If
-    unset the connection is to the external IP if one exists, else the
-    identity aware proxy will be used.
+    If set the ssh connection will be made to the node's internal IP.
 
   -a|--active-only
     If set logs that have 0 lines written during the test will be ignored.
